@@ -11,72 +11,73 @@ const shutterDecimals = [
     1/125, 1/250, 1/500, 1/1000, 1/2000
 ];
 
-const video = document.getElementById('camera-feed');
+const imageInput = document.getElementById('image-input');
+const previewImage = document.getElementById('preview-image');
+const uploadBtnContainer = document.getElementById('upload-btn-container');
 const canvas = document.getElementById('analysis-canvas');
 const ctx = canvas.getContext('2d', { willReadFrequently: true });
+
 const isoSlider = document.getElementById('iso-slider');
 const apertureSlider = document.getElementById('aperture-slider');
 const isoDisplay = document.getElementById('iso-display');
 const apertureDisplay = document.getElementById('aperture-display');
 const shutterSpeedDisplay = document.getElementById('shutter-speed');
 
-let currentLuminance = 100; 
-const CALIBRATION_CONSTANT = 12.5; 
-let isCameraReady = false; // Flag to prevent calculations before video loads
+let currentLuminance = null; 
+// Calibration constant needs tuning. Since we are analyzing a processed photo
+// rather than raw sensor data, this number will differ from the previous script.
+const CALIBRATION_CONSTANT = 4.5; 
 
-async function startCamera() {
-    try {
-        const stream = await navigator.mediaDevices.getUserMedia({ 
-            video: { facingMode: "environment" } 
-        });
-        video.srcObject = stream;
+// --- Handle Image Upload ---
+imageInput.addEventListener('change', function(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    
+    reader.onload = function(event) {
+        previewImage.src = event.target.result;
+        previewImage.style.display = 'block';
+        uploadBtnContainer.style.display = 'none'; // Hide the button after upload
         
-        video.onloadedmetadata = () => {
-            canvas.width = video.videoWidth;
-            canvas.height = video.videoHeight;
-            isCameraReady = true;
-            // Force an initial UI update based on default slider positions
-            updateUI(); 
-            requestAnimationFrame(analyzeFrame);
-        };
-    } catch (err) {
-        console.error("Camera access denied or error: ", err);
-        shutterSpeedDisplay.innerText = "Error";
-    }
-}
-
-function analyzeFrame() {
-    if (isCameraReady && video.readyState === video.HAVE_ENOUGH_DATA) {
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-        
-        const sizeX = canvas.width * 0.1;
-        const sizeY = canvas.height * 0.1;
-        const startX = (canvas.width / 2) - (sizeX / 2);
-        const startY = (canvas.height / 2) - (sizeY / 2);
-
-        const frame = ctx.getImageData(startX, startY, sizeX, sizeY);
-        let totalBrightness = 0;
-        const data = frame.data;
-
-        for (let i = 0; i < data.length; i += 4) {
-            const r = data[i];
-            const g = data[i+1];
-            const b = data[i+2];
-            const brightness = (0.299 * r + 0.587 * g + 0.114 * b);
-            totalBrightness += brightness;
+        // Wait for image to load before analyzing
+        previewImage.onload = function() {
+            analyzeImage();
         }
+    };
+    
+    reader.readAsDataURL(file);
+});
 
-        const avgBrightness = totalBrightness / (data.length / 4);
-        currentLuminance = (currentLuminance * 0.9) + (avgBrightness * 0.1);
-        
-        calculateExposure();
+// --- Analyze Image Pixels ---
+function analyzeImage() {
+    canvas.width = previewImage.naturalWidth;
+    canvas.height = previewImage.naturalHeight;
+    
+    ctx.drawImage(previewImage, 0, 0, canvas.width, canvas.height);
+    
+    const frame = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const data = frame.data;
+    let totalBrightness = 0;
+    
+    // Sample every 4th pixel to save processing time on high-res S25 Ultra photos
+    let sampleCount = 0;
+
+    for (let i = 0; i < data.length; i += 16) {
+        const r = data[i];
+        const g = data[i+1];
+        const b = data[i+2];
+        const brightness = (0.299 * r + 0.587 * g + 0.114 * b);
+        totalBrightness += brightness;
+        sampleCount++;
     }
-    requestAnimationFrame(analyzeFrame);
+
+    currentLuminance = totalBrightness / sampleCount;
+    calculateExposure();
 }
 
-// Separated the UI update logic from the math for better performance
+// --- Update UI & Calculate ---
 function updateUI() {
-    // FIXED: Parse slider value as an integer before using as array index
     const isoIndex = parseInt(isoSlider.value, 10);
     const apertureIndex = parseInt(apertureSlider.value, 10);
     
@@ -85,8 +86,12 @@ function updateUI() {
 }
 
 function calculateExposure() {
-    // Update the numbers on the screen first
     updateUI();
+
+    if (currentLuminance === null) {
+        shutterSpeedDisplay.innerText = "--";
+        return;
+    }
 
     const iso = isoValues[parseInt(isoSlider.value, 10)];
     const aperture = apertureValues[parseInt(apertureSlider.value, 10)];
@@ -109,10 +114,7 @@ function calculateExposure() {
     shutterSpeedDisplay.innerText = shutterSpeeds[closestIndex];
 }
 
-// Update the UI immediately when the slider moves, even if the camera is still analyzing
 isoSlider.addEventListener('input', calculateExposure);
 apertureSlider.addEventListener('input', calculateExposure);
 
-// Ensure UI shows correct initial values even before camera permission is granted
-updateUI(); 
-startCamera();
+updateUI();
