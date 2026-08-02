@@ -3,20 +3,26 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Pentax 67 Meter</title>
-    <link rel="manifest" href="manifest.json">
-    <meta name="theme-color" content="#1a1a1a">
+    <title>Pentax 67 Image Meter</title>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body { font-family: -apple-system, sans-serif; background-color: #1a1a1a; color: white; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
         
-        #viewfinder-container { flex: 6; position: relative; background: #000; overflow: hidden; }
-        video { width: 100%; height: 100%; object-fit: cover; }
-        #spot-meter { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 80px; height: 80px; border: 2px solid #ffcc00; border-radius: 50%; box-shadow: 0 0 0 9999px rgba(0,0,0,0.3); pointer-events: none; }
+        /* Image Preview Section */
+        #image-container { flex: 5; position: relative; background: #000; display: flex; justify-content: center; align-items: center; overflow: hidden; border-bottom: 2px solid #444;}
+        
+        #preview-image { max-width: 100%; max-height: 100%; object-fit: contain; display: none; }
+        
+        #upload-btn-container { position: absolute; z-index: 10;}
+        
+        /* Styled File Input Button */
+        .custom-file-upload { display: inline-block; padding: 12px 24px; cursor: pointer; background-color: #ffcc00; color: #000; font-weight: bold; border-radius: 8px; text-transform: uppercase; letter-spacing: 1px; font-size: 14px;}
+        input[type="file"] { display: none; }
         
         canvas { display: none; }
 
-        #controls-container { flex: 4; padding: 20px; background: #2a2a2a; display: flex; flex-direction: column; justify-content: space-between; border-top: 2px solid #444; }
+        /* Controls Section */
+        #controls-container { flex: 5; padding: 20px; background: #2a2a2a; display: flex; flex-direction: column; justify-content: space-between; }
         
         .control-group { display: flex; flex-direction: column; margin-bottom: 15px; }
         .control-header { display: flex; justify-content: space-between; font-size: 14px; color: #aaa; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 1px; }
@@ -33,10 +39,14 @@
 </head>
 <body>
 
-    <div id="viewfinder-container">
-        <!-- FIXED: Added 'muted' to ensure autoplay works on mobile -->
-        <video id="camera-feed" autoplay playsinline muted></video>
-        <div id="spot-meter"></div>
+    <div id="image-container">
+        <div id="upload-btn-container">
+            <label class="custom-file-upload">
+                <input type="file" id="image-input" accept="image/*" capture="environment">
+                Import Photo
+            </label>
+        </div>
+        <img id="preview-image" alt="Imported scene">
         <canvas id="analysis-canvas"></canvas>
     </div>
 
@@ -59,16 +69,10 @@
 
         <div id="result-container">
             <div class="label">Shutter Speed</div>
-            <div id="shutter-speed">1/125</div>
+            <div id="shutter-speed">--</div>
         </div>
     </div>
 
     <script src="script.js"></script>
-    <script>
-      if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.register('sw.js')
-          .then(() => console.log('Service Worker Registered'));
-      }
-    </script>
 </body>
 </html>
