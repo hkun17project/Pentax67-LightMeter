@@ -24,8 +24,6 @@ const apertureDisplay = document.getElementById('aperture-display');
 const shutterSpeedDisplay = document.getElementById('shutter-speed');
 
 let currentLuminance = null; 
-// Calibration constant needs tuning. Since we are analyzing a processed photo
-// rather than raw sensor data, this number will differ from the previous script.
 const CALIBRATION_CONSTANT = 4.5; 
 
 // --- Handle Image Upload ---
@@ -38,42 +36,59 @@ imageInput.addEventListener('change', function(e) {
     reader.onload = function(event) {
         previewImage.src = event.target.result;
         previewImage.style.display = 'block';
-        uploadBtnContainer.style.display = 'none'; // Hide the button after upload
+        uploadBtnContainer.style.display = 'none'; 
         
-        // Wait for image to load before analyzing
         previewImage.onload = function() {
             analyzeImage();
         }
     };
     
+    // Trap errors if the file reader fails
+    reader.onerror = function() {
+        alert("Error reading file.");
+    };
+    
     reader.readAsDataURL(file);
 });
 
-// --- Analyze Image Pixels ---
+// --- Analyze Image Pixels (WITH MEMORY FIX) ---
 function analyzeImage() {
-    canvas.width = previewImage.naturalWidth;
-    canvas.height = previewImage.naturalHeight;
-    
-    ctx.drawImage(previewImage, 0, 0, canvas.width, canvas.height);
-    
-    const frame = ctx.getImageData(0, 0, canvas.width, canvas.height);
-    const data = frame.data;
-    let totalBrightness = 0;
-    
-    // Sample every 4th pixel to save processing time on high-res S25 Ultra photos
-    let sampleCount = 0;
+    try {
+        // FIX: Downscale massive S25 Ultra photos to prevent RAM crashes
+        const MAX_WIDTH = 600;
+        let scale = 1;
+        
+        if (previewImage.naturalWidth > MAX_WIDTH) {
+            scale = MAX_WIDTH / previewImage.naturalWidth;
+        }
 
-    for (let i = 0; i < data.length; i += 16) {
-        const r = data[i];
-        const g = data[i+1];
-        const b = data[i+2];
-        const brightness = (0.299 * r + 0.587 * g + 0.114 * b);
-        totalBrightness += brightness;
-        sampleCount++;
+        canvas.width = previewImage.naturalWidth * scale;
+        canvas.height = previewImage.naturalHeight * scale;
+        
+        ctx.drawImage(previewImage, 0, 0, canvas.width, canvas.height);
+        
+        const frame = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const data = frame.data;
+        let totalBrightness = 0;
+        let sampleCount = 0;
+
+        for (let i = 0; i < data.length; i += 16) {
+            const r = data[i];
+            const g = data[i+1];
+            const b = data[i+2];
+            const brightness = (0.299 * r + 0.587 * g + 0.114 * b);
+            totalBrightness += brightness;
+            sampleCount++;
+        }
+
+        currentLuminance = totalBrightness / sampleCount;
+        calculateExposure();
+        
+    } catch (error) {
+        // This will pop up on your screen if the canvas fails
+        alert("System Error: " + error.message);
+        shutterSpeedDisplay.innerText = "ERR";
     }
-
-    currentLuminance = totalBrightness / sampleCount;
-    calculateExposure();
 }
 
 // --- Update UI & Calculate ---
